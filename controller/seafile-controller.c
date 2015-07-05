@@ -29,7 +29,7 @@ char *topdir = NULL;
 
 char *seafile_ld_library_path = NULL;
 
-static const char *short_opts = "hvftCc:d:L:g:G:P:";
+static const char *short_opts = "hvftCc:d:L:g:G:P:p:";
 static const struct option long_opts[] = {
     { "help", no_argument, NULL, 'h', },
     { "version", no_argument, NULL, 'v', },
@@ -42,6 +42,7 @@ static const struct option long_opts[] = {
     { "ccnet-debug-level", required_argument, NULL, 'g' },
     { "seafile-debug-level", required_argument, NULL, 'G' },
     { "pidfile", required_argument, NULL, 'P' },
+    { "pidsdir", required_argument, NULL, 'p' },
 };
 
 static void controller_exit (int code) __attribute__((noreturn));
@@ -575,9 +576,20 @@ stop_ccnet_server ()
 }
 
 static void
-init_pidfile_path (SeafileController *ctl)
+init_pidfile_path (SeafileController *ctl, char *pids_dir)
 {
-    char *pid_dir = g_build_filename (topdir, "pids", NULL);
+    char *pid_dir;
+
+    if (pids_dir == NULL) {
+        pid_dir = g_strdup(g_getenv ("SEAFILE_PID_DIR"));
+    } else {
+        pid_dir = pids_dir;
+    }
+
+    if (pid_dir == NULL) {
+        pid_dir = g_build_filename (topdir, "pids", NULL);
+    }
+
     if (!g_file_test(pid_dir, G_FILE_TEST_EXISTS)) {
         if (g_mkdir(pid_dir, 0777) < 0) {
             seaf_warning("failed to create pid dir %s: %s", pid_dir, strerror(errno));
@@ -595,6 +607,7 @@ seaf_controller_init (SeafileController *ctl,
                       char *config_dir,
                       char *seafile_dir,
                       char *logdir,
+                      char *pids_dir,
                       gboolean cloud_mode)
 {
     init_seafile_path ();
@@ -641,7 +654,7 @@ seaf_controller_init (SeafileController *ctl,
         return -1;
     }
 
-    init_pidfile_path (ctl);
+    init_pidfile_path (ctl, pids_dir);
     setup_env ();
 
     return 0;
@@ -880,6 +893,7 @@ int main (int argc, char **argv)
     char *config_dir = DEFAULT_CONFIG_DIR;
     char *seafile_dir = NULL;
     char *logdir = NULL;
+    char *pids_dir = NULL;
     char *ccnet_debug_level_str = "info";
     char *seafile_debug_level_str = "debug";
     int daemon_mode = 1;
@@ -925,6 +939,9 @@ int main (int argc, char **argv)
         case 'P':
             controller_pidfile = optarg;
             break;
+        case 'p':
+            pids_dir = g_strdup(optarg);
+            break;
         default:
             usage ();
             exit (1);
@@ -951,7 +968,7 @@ int main (int argc, char **argv)
     }
 
     ctl = g_new0 (SeafileController, 1);
-    if (seaf_controller_init (ctl, config_dir, seafile_dir, logdir, cloud_mode) < 0) {
+    if (seaf_controller_init (ctl, config_dir, seafile_dir, logdir, pids_dir, cloud_mode) < 0) {
         controller_exit(1);
     }
 
